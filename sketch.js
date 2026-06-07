@@ -77,7 +77,9 @@ function draw() {
   
   // 繪製視訊背景（降低透明度讓 UI 更明顯）
   push();
-  tint(255, 80); 
+  translate(width, 0);
+  scale(-1, 1); // 必須鏡像顯示影像，才能與 flipped: true 的 AI 座標對齊
+  tint(255, 80);
   image(video, 0, 0, width, height);
   pop();
 
@@ -115,12 +117,13 @@ function drawStartScreen() {
 
   // 偵測手部是否懸停在「START」按鈕上
   let isHovered = false;
-  if (hands.length > 0) {
+  if (hands.length > 0 && hands[0].keypoints) {
     let indexTip = hands[0].keypoints[8];
-    // 繪製玩家的食指
-    fill(0, 255, 200, 150);
-    circle(indexTip.x, indexTip.y, 20);
-    
+    // 繪製偵測點，讓使用者知道 AI 有抓到位置
+    fill(255, 255, 0);
+    noStroke();
+    circle(indexTip.x, indexTip.y, 15);
+
     // 計算食指到按鈕中心的距離
     let d = dist(indexTip.x, indexTip.y, btnX, btnY);
     if (d < btnR) {
@@ -163,12 +166,15 @@ function drawStartScreen() {
 
   // 按鈕內文字
   noStroke();
-  fill(255);
+  textAlign(CENTER, CENTER);
   textSize(18);
-  text(isHovered ? "蓄能中..." : "食指懸停", btnX, btnY - 10);
+  fill(255);
+  text(isHovered ? "蓄能中..." : "START", btnX, btnY - 5);
+  
   textSize(12);
-  fill(isHovered ? "#fff" : "#00ffc8");
-  text(isHovered ? floor(startHoverTimer) + "%" : "START", btnX, btnY + 15);
+  fill(isHovered ? "#fff" : "rgba(0, 255, 200, 0.8)");
+  if (isHovered) text(floor(startHoverTimer) + "%", btnX, btnY + 15);
+  else text("食指懸停於此", btnX, btnY + 15);
 
   // 提示語
   fill(150);
@@ -181,7 +187,7 @@ function drawPlayScreen() {
   Engine.update(engine);
 
   // --- 手部追蹤與動態回饋 ---
-  if (hands.length > 0) {
+  if (hands.length > 0 && hands[0].keypoints) {
     let indexTip = hands[0].keypoints[8];
     Body.setPosition(fingerBody, { x: indexTip.x, y: indexTip.y });
     
