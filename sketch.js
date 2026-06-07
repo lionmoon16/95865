@@ -28,7 +28,16 @@ let restartHoverTimer = 0; // 重新開始按鈕的懸停計時器
 let colorPalette = ["#abcd5e", "#14976b", "#2b67af", "#62b6de", "#f589a3", "#ef562f", "#fc8405", "#f9d531"];
 
 function preload() {
-  handPose = ml5.handPose({ flipped: true });
+  // 增加偵測設定，提高靈敏度
+  const options = {
+    flipped: true, 
+    maxHands: 1,
+    modelType: "full", // 使用完整模型提高準確度
+    detectionConfidence: 0.5
+  };
+  handPose = ml5.handPose(options, () => {
+    isModelReady = true; // 模型載入完成即標記為就緒
+  });
 }
 
 function setup() {
@@ -125,17 +134,19 @@ function drawStartScreen() {
 
   // 偵測手部是否懸停在「START」按鈕上
   let isHovered = false;
-  if (hands.length > 0 && hands[0].keypoints) {
-    let indexTip = hands[0].keypoints[8];
-    // 繪製偵測點，讓使用者知道 AI 有抓到位置
-    fill(255, 255, 0);
-    noStroke();
-    circle(indexTip.x, indexTip.y, 15);
+  if (hands.length > 0) {
+    drawHandSkeleton(); // 顯示手部骨架幫助校正
+    
+    let hand = hands[0];
+    // 安全取得食指座標
+    let indexTip = hand.index_finger_tip || (hand.keypoints && hand.keypoints[8]);
+    
+    if (indexTip) {
+      fill(255, 255, 0);
+      circle(indexTip.x, indexTip.y, 15);
 
-    // 計算食指到按鈕中心的距離
-    let d = dist(indexTip.x, indexTip.y, btnX, btnY);
-    if (d < btnR) {
-      isHovered = true;
+      let d = dist(indexTip.x, indexTip.y, btnX, btnY);
+      if (d < btnR) isHovered = true;
     }
   }
 
@@ -193,18 +204,23 @@ function drawPlayScreen() {
   Engine.update(engine);
 
   // --- 手部追蹤與動態回饋 ---
-  if (hands.length > 0 && hands[0].keypoints) {
-    let indexTip = hands[0].keypoints[8];
-    Body.setPosition(fingerBody, { x: indexTip.x, y: indexTip.y });
+  if (hands.length > 0) {
+    drawHandSkeleton();
+    let hand = hands[0];
+    let indexTip = hand.index_finger_tip || (hand.keypoints && hand.keypoints[8]);
     
-    // 手指外圍的極光呼吸效果
-    noFill();
-    stroke(0, 255, 200, 150);
-    strokeWeight(3);
-    circle(indexTip.x, indexTip.y, 70 + sin(frameCount * 0.1) * 5); 
-    fill(0, 255, 200, 30);
-    noStroke();
-    circle(indexTip.x, indexTip.y, 70);
+    if (indexTip) {
+      Body.setPosition(fingerBody, { x: indexTip.x, y: indexTip.y });
+      
+      // 手指外圍的極光呼吸效果
+      noFill();
+      stroke(0, 255, 200, 150);
+      strokeWeight(3);
+      circle(indexTip.x, indexTip.y, 70 + sin(frameCount * 0.1) * 5); 
+      fill(0, 255, 200, 30);
+      noStroke();
+      circle(indexTip.x, indexTip.y, 70);
+    }
   } else {
     Body.setPosition(fingerBody, { x: -100, y: -100 });
   }
@@ -412,6 +428,23 @@ function drawConnectionStatus() {
   text(isTracking ? "AI: TRACKING" : "AI: SEARCHING", width - 110, 33);
 }
 
+// --- 繪製手部骨架幫助視覺輔助 ---
+function drawHandSkeleton() {
+  if (hands.length > 0) {
+    let hand = hands[0];
+    if (hand.keypoints) {
+      stroke(0, 255, 200, 50); // 淡淡的青色線條
+      strokeWeight(2);
+      // 繪製關節點
+      for (let kp of hand.keypoints) {
+        fill(0, 255, 200, 100);
+        noStroke();
+        circle(kp.x, kp.y, 4);
+      }
+    }
+  }
+}
+
 // --- 輔助函式與物件類別（維持不變） ---
 function spawnBall() {
   let r = random(15, 25); 
@@ -428,7 +461,6 @@ function createSparks(x, y, col) {
 
 function gotHands(results) { 
   hands = results; 
-  isModelReady = true; // 收到第一次偵測結果，標記為已就緒
 }
 
 class Particle {
