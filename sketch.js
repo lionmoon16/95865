@@ -20,8 +20,11 @@ let balls = [];
 let particles = [];      
 let maxBalls = 5;        
 let score = 0;
+let highScore = 0;
+let lives = 3;
 let lastSpawnTime = 0;   
 let startHoverTimer = 0; // 開始按鈕的懸停計時器
+let restartHoverTimer = 0; // 重新開始按鈕的懸停計時器
 let colorPalette = ["#abcd5e", "#14976b", "#2b67af", "#62b6de", "#f589a3", "#ef562f", "#fc8405", "#f9d531"];
 
 function preload() {
@@ -35,6 +38,9 @@ function setup() {
   video = createCapture(VIDEO);
   video.size(640, 480);
   video.hide();
+
+  // 從瀏覽器快取讀取最高分數
+  highScore = parseInt(localStorage.getItem("neonShieldHighScore")) || 0;
 
   // 確保攝影機元數據載入後再開始偵測
   video.elt.onloadedmetadata = () => {
@@ -88,6 +94,8 @@ function draw() {
     drawStartScreen();
   } else if (gameState === "PLAY") {
     drawPlayScreen();
+  } else if (gameState === "GAMEOVER") {
+    drawGameOverScreen();
   }
   
   // 無論在哪個畫面，都繪製右上角的手勢偵測狀態燈
@@ -141,9 +149,7 @@ function drawStartScreen() {
     if (startHoverTimer >= 100) {
       // 能量蓄滿，初始化遊戲並開始
       gameState = "PLAY";
-      score = 0;
-      balls = [];
-      spawnBall();
+      resetGame();
     }
   } else {
     startHoverTimer = max(0, startHoverTimer - 4); // 離開時能量消退
@@ -217,7 +223,14 @@ function drawPlayScreen() {
     circle(ball.position.x, ball.position.y, ball.circleRadius * 2);
 
     if (ball.position.y > height + 30) {
-      score = max(0, score - 5);
+      score = max(0, score - 10);
+      lives--;
+      
+      // 檢查遊戲結束條件
+      if (lives <= 0) {
+        endGame();
+      }
+
       Body.setPosition(ball, { x: random(100, width - 100), y: -30 });
       Body.setVelocity(ball, { x: random(-2, 2), y: 0 });
     }
@@ -262,10 +275,112 @@ function drawPlayScreen() {
   textAlign(LEFT, CENTER);
   text("BALLS: " + balls.length + " / " + maxBalls, 32, 35);
   
+  // 4. 右側生命值儀表
+  drawLivesHUD();
+
   // 每秒穩定加分
   if (frameCount % 60 === 0 && hands.length > 0) {
     score++; 
   }
+}
+
+// --- 畫面 3：遊戲結束畫面 ---
+function drawGameOverScreen() {
+  textAlign(CENTER, CENTER);
+  textFont('Courier New');
+
+  // 標題
+  fill(255, 50, 50);
+  textSize(50);
+  text("GAME OVER", width / 2, height / 2 - 100);
+
+  // 分數統計
+  fill(200);
+  textSize(20);
+  text("FINAL SCORE: " + score, width / 2, height / 2 - 40);
+  fill(0, 255, 200);
+  text("HIGH SCORE: " + highScore, width / 2, height / 2 - 10);
+
+  let btnX = width / 2;
+  let btnY = height / 2 + 80;
+  let btnR = 50;
+
+  // 偵測重新開始按鈕懸停
+  let isHovered = false;
+  if (hands.length > 0 && hands[0].keypoints) {
+    let indexTip = hands[0].keypoints[8];
+    fill(255, 255, 0);
+    circle(indexTip.x, indexTip.y, 15);
+    if (dist(indexTip.x, indexTip.y, btnX, btnY) < btnR) isHovered = true;
+  }
+
+  if (isHovered) {
+    restartHoverTimer += 3;
+    if (restartHoverTimer >= 100) {
+      gameState = "START"; // 回到首頁
+      restartHoverTimer = 0;
+    }
+    fill(255, 255, 255, 50);
+  } else {
+    restartHoverTimer = max(0, restartHoverTimer - 5);
+    fill(0, 0, 0, 100);
+  }
+
+  // 繪製重新開始按鈕
+  stroke(255);
+  circle(btnX, btnY, btnR * 2);
+  noStroke();
+  fill(255);
+  textSize(16);
+  text(isHovered ? "返回中..." : "RESTART", btnX, btnY);
+
+  // 進度環
+  if (restartHoverTimer > 0) {
+    noFill();
+    stroke(0, 255, 200);
+    strokeWeight(4);
+    let endAngle = map(restartHoverTimer, 0, 100, -HALF_PI, TWO_PI - HALF_PI);
+    arc(btnX, btnY, btnR * 2 + 10, btnR * 2 + 10, -HALF_PI, endAngle);
+  }
+}
+
+// --- 功能輔助函式 ---
+
+function resetGame() {
+  // 清除現有的物理球體
+  for (let ball of balls) {
+    World.remove(engine.world, ball);
+  }
+  balls = [];
+  score = 0;
+  lives = 3;
+  startHoverTimer = 0;
+  spawnBall();
+}
+
+function endGame() {
+  gameState = "GAMEOVER";
+  // 更新最高分數
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem("neonShieldHighScore", highScore);
+  }
+}
+
+function drawLivesHUD() {
+  let startX = width - 150;
+  let startY = 35;
+  fill(20, 20, 35, 180);
+  stroke(255, 50, 50, 100);
+  rectMode(CENTER);
+  rect(startX + 60, startY, 120, 35, 5);
+  
+  noStroke();
+  textAlign(LEFT, CENTER);
+  fill(255, 100, 100);
+  let heartStr = "";
+  for(let i=0; i<lives; i++) heartStr += "❤";
+  text("HP: " + heartStr, startX + 15, startY);
 }
 
 // --- 右上角手勢偵測狀態指示燈 ---
@@ -330,4 +445,26 @@ class Particle {
     pop();
   }
   isDead() { return this.alpha <= 0; }
+}
+
+// --- 新增：簡單的替代操作方式 ---
+function mousePressed() {
+  if (gameState === "START") {
+    gameState = "PLAY";
+    resetGame();
+  } else if (gameState === "GAMEOVER") {
+    gameState = "START";
+  }
+}
+
+function keyPressed() {
+  // 按下空白鍵也可以開始或重玩
+  if (key === ' ' || keyCode === 32) {
+    if (gameState === "START") {
+      gameState = "PLAY";
+      resetGame();
+    } else if (gameState === "GAMEOVER") {
+      gameState = "START";
+    }
+  }
 }
