@@ -7,6 +7,7 @@ Features: 科技感起使畫面、手勢狀態指示燈、賽博朋克 HUD、碰
 let handPose;
 let video;
 let hands = [];
+let isModelReady = false; // 追蹤模型是否準備就緒
 
 // --- Matter.js 變數 ---
 const { Engine, World, Bodies, Body, Events } = Matter;
@@ -31,10 +32,14 @@ function setup() {
   createCanvas(640, 480);
   
   // 1. 設定攝影機
-  video = createCapture(VIDEO, { flipped: true });
+  video = createCapture(VIDEO);
   video.size(640, 480);
   video.hide();
-  handPose.detectStart(video, gotHands);
+
+  // 確保攝影機元數據載入後再開始偵測
+  video.elt.onloadedmetadata = () => {
+    handPose.detectStart(video, gotHands);
+  };
 
   // 2. 設定物理引擎
   engine = Engine.create();
@@ -60,6 +65,15 @@ function setup() {
 function draw() {
   // 基礎科技感暗背景
   background(20, 20, 30);
+
+  // 如果 AI 還沒準備好，顯示載入狀態並停止後續邏輯
+  if (!isModelReady) {
+    fill(0, 255, 200);
+    textAlign(CENTER, CENTER);
+    textSize(20);
+    text("系統啟動中... 請允許攝影機權限", width / 2, height / 2);
+    return;
+  }
   
   // 繪製視訊背景（降低透明度讓 UI 更明顯）
   push();
@@ -291,7 +305,10 @@ function createSparks(x, y, col) {
   for (let i = 0; i < 15; i++) { particles.push(new Particle(x, y, col)); }
 }
 
-function gotHands(results) { hands = results; }
+function gotHands(results) { 
+  hands = results; 
+  isModelReady = true; // 收到第一次偵測結果，標記為已就緒
+}
 
 class Particle {
   constructor(x, y, col) {
